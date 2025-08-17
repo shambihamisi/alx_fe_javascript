@@ -10,20 +10,20 @@
 
   <div>
     <label for="categoryFilter">Category:</label>
-    <select id="categoryFilter"></select>
+    <select id="categoryFilter" onchange="filterQuotes()">
+      <option value="All">All Categories</option>
+    </select>
     <button id="newQuote">Show New Quote</button>
     <button id="toggleAddQuote">Add Quote</button>
-  </div>
-
-  <div>
-    <button id="exportJson">Export Quotes</button>
-    <input type="file" id="importFile" accept=".json" onchange="importFromJsonFile(event)" />
   </div>
 
   <div id="quoteCard">
     <div id="quoteText">Click “Show New Quote” to get started.</div>
     <div id="quoteCategory"></div>
   </div>
+
+  <h2>Quotes</h2>
+  <ul id="quotesList"></ul>
 
   <div id="addQuoteContainer"></div>
 
