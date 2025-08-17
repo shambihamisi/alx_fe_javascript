@@ -21,13 +21,17 @@ function saveQuotes() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(quotes));
 }
 function escapeHtml(s) {
-  return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+  return String(s)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 }
 
 let quotes = loadQuotes();
 
+// Elements (now supports #quoteDisplay)
 const els = {
   categoryFilter: document.getElementById("categoryFilter"),
+  quoteDisplay: document.getElementById("quoteDisplay"),
   quoteText: document.getElementById("quoteText"),
   quoteCategory: document.getElementById("quoteCategory"),
   newQuoteBtn: document.getElementById("newQuote"),
@@ -43,13 +47,23 @@ function getCategories() {
 
 function populateCategories(selected) {
   const cats = getCategories();
-  const sel = selected && cats.includes(selected) ? selected : (localStorage.getItem(LAST_CATEGORY_KEY) || "All");
-  els.categoryFilter.innerHTML = cats.map(c =>
-    `<option value="${escapeHtml(c)}"${c===sel?" selected":""}>${escapeHtml(c)}</option>`
-  ).join("");
+  const remembered = localStorage.getItem(LAST_CATEGORY_KEY) || "All";
+  const sel = selected && cats.includes(selected) ? selected : (cats.includes(remembered) ? remembered : "All");
+  if (els.categoryFilter) {
+    els.categoryFilter.innerHTML = cats.map(c =>
+      `<option value="${escapeHtml(c)}"${c===sel?" selected":""}>${escapeHtml(c)}</option>`
+    ).join("");
+  }
+}
+
+function currentFilteredQuotes() {
+  const sel = (els.categoryFilter && els.categoryFilter.value) || "All";
+  if (sel === "All") return quotes;
+  return quotes.filter(q => (q.category||"").trim().toLowerCase() === sel.trim().toLowerCase());
 }
 
 function renderQuotesList(list) {
+  if (!els.quotesList) return; // Optional list
   if (!list.length) {
     els.quotesList.innerHTML = "<li>No quotes in this category yet.</li>";
     return;
@@ -59,33 +73,40 @@ function renderQuotesList(list) {
   ).join("");
 }
 
-function currentFilteredQuotes() {
-  const sel = els.categoryFilter.value || "All";
-  if (sel === "All") return quotes;
-  return quotes.filter(q => (q.category||"").trim().toLowerCase() === sel.trim().toLowerCase());
+function displayQuote(pick) {
+  if (els.quoteDisplay) {
+    els.quoteDisplay.textContent = `${pick.text} — ${pick.category}`;
+  } else {
+    if (els.quoteText) els.quoteText.textContent = pick.text;
+    if (els.quoteCategory) els.quoteCategory.textContent = `# ${pick.category}`;
+  }
+}
+
+function clearQuote(msg = "No quotes found for this category.") {
+  if (els.quoteDisplay) {
+    els.quoteDisplay.textContent = msg;
+  } else {
+    if (els.quoteText) els.quoteText.textContent = msg;
+    if (els.quoteCategory) els.quoteCategory.textContent = "";
+  }
 }
 
 function showRandomQuote() {
   const pool = currentFilteredQuotes();
-  if (!pool.length) {
-    els.quoteText.textContent = "No quotes found for this category.";
-    els.quoteCategory.textContent = "";
-    return;
-  }
+  if (!pool.length) { clearQuote(); return; }
   const pick = pool[Math.floor(Math.random() * pool.length)];
-  els.quoteText.textContent = pick.text;
-  els.quoteCategory.textContent = `# ${pick.category}`;
+  displayQuote(pick);
 }
 
 function filterQuotes() {
-  const sel = els.categoryFilter.value || "All";
+  const sel = (els.categoryFilter && els.categoryFilter.value) || "All";
   localStorage.setItem(LAST_CATEGORY_KEY, sel);
   renderQuotesList(currentFilteredQuotes());
   showRandomQuote();
 }
 
 function createAddQuoteForm() {
-  if (document.getElementById("dqgAddForm")) return;
+  if (!els.addQuoteContainer || document.getElementById("dqgAddForm")) return;
   const wrap = document.createElement("div");
   wrap.id = "dqgAddForm";
   wrap.innerHTML = `
@@ -112,7 +133,7 @@ function addQuote() {
   quotes.push({ text, category });
   saveQuotes();
 
-  const prevSel = els.categoryFilter.value || "All";
+  const prevSel = (els.categoryFilter && els.categoryFilter.value) || "All";
   populateCategories(prevSel);
   filterQuotes();
 
@@ -126,14 +147,25 @@ document.addEventListener("DOMContentLoaded", () => {
   renderQuotesList(currentFilteredQuotes());
   showRandomQuote();
 
-  els.newQuoteBtn.addEventListener("click", showRandomQuote);
-  els.toggleAddQuoteBtn.addEventListener("click", () => {
-    if (!document.getElementById("dqgAddForm")) createAddQuoteForm();
-    const form = document.getElementById("dqgAddForm");
-    const visible = form.style.display !== "none";
-    form.style.display = visible ? "none" : "block";
-    els.toggleAddQuoteBtn.textContent = visible ? "Add Quote" : "Close Add Quote";
-  });
+  if (els.newQuoteBtn) els.newQuoteBtn.addEventListener("click", showRandomQuote);
 
+  if (els.toggleAddQuoteBtn) {
+    els.toggleAddQuoteBtn.addEventListener("click", () => {
+      if (!document.getElementById("dqgAddForm")) createAddQuoteForm();
+      const form = document.getElementById("dqgAddForm");
+      const visible = form && form.style.display !== "none";
+      if (form) form.style.display = visible ? "none" : "block";
+      els.toggleAddQuoteBtn.textContent = visible ? "Add Quote" : "Close Add Quote";
+    });
+  }
+
+  if (els.categoryFilter) {
+    els.categoryFilter.addEventListener("change", filterQuotes);
+  }
+
+  // Expose for inline handlers if you use them
   window.filterQuotes = filterQuotes;
+  window.showRandomQuote = showRandomQuote;
+  window.createAddQuoteForm = createAddQuoteForm;
+  window.addQuote = addQuote;
 });
