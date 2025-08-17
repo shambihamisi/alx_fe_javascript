@@ -29,10 +29,6 @@ const els = {
   syncStatus: document.getElementById("syncStatus"),
   syncBanner: document.getElementById("syncBanner"),
   syncMessage: document.getElementById("syncMessage"),
-  reviewConflictsBtn: document.getElementById("reviewConflictsBtn"),
-  conflictPanel: document.getElementById("conflictPanel"),
-  conflictList: document.getElementById("conflictList"),
-  closeConflictPanel: document.getElementById("closeConflictPanel"),
 };
 
 // ---------- Utilities ----------
@@ -105,21 +101,7 @@ function filterQuotes() {
   showRandomQuote();
 }
 
-// ---------- Add Quote UI ----------
-function createAddQuoteForm() {
-  if (!els.addQuoteContainer || document.getElementById("dqgAddForm")) return;
-  const wrap = document.createElement("div");
-  wrap.id = "dqgAddForm";
-  wrap.innerHTML = `
-    <h3>Add a Quote</h3>
-    <input id="newQuoteText" type="text" placeholder="Enter a new quote" />
-    <input id="newQuoteCategory" type="text" placeholder="Enter quote category" />
-    <button id="submitNewQuote">Add Quote</button>
-    <span id="formMsg"></span>
-  `;
-  els.addQuoteContainer.appendChild(wrap);
-  document.getElementById("submitNewQuote").addEventListener("click", addQuote);
-}
+// ---------- Add Quote ----------
 async function addQuote() {
   const textEl = document.getElementById("newQuoteText");
   const catEl = document.getElementById("newQuoteCategory");
@@ -130,13 +112,6 @@ async function addQuote() {
   if (!text || !category) { if (msg){ msg.textContent = "Please fill both fields."; msg.style.color="#c0292b"; } return; }
   const q = { text, category, updatedAt: Date.now() };
   quotes.push(q); saveQuotes();
-  try {
-    const posted = await SERVER.postQuote(q);
-    if (posted && posted.serverId) {
-      const idx = quotes.findIndex(x => keyOf(x) === keyOf(q));
-      if (idx >= 0) { quotes[idx].serverId = posted.serverId; quotes[idx].updatedAt = Date.now(); saveQuotes(); }
-    }
-  } catch {}
   const keep = els.categoryFilter && els.categoryFilter.value ? els.categoryFilter.value : selectedCategory;
   populateCategories(keep); filterQuotes();
   textEl.value = ""; catEl.value = ""; if (msg){ msg.textContent = "Quote added!"; msg.style.color="#0f8f2e"; }
@@ -145,7 +120,7 @@ async function addQuote() {
 // ---------- Server Simulation ----------
 const SERVER = {
   async fetchQuotes() {
-    const res = await fetch("https://jsonplaceholder.typicode.com/posts?_limit=8");
+    const res = await fetch("https://jsonplaceholder.typicode.com/posts?_limit=5");
     const posts = await res.json();
     const cats = ["Inspiration","Mindset","Humor","Productivity","Programming"];
     return posts.map(p => ({
@@ -154,53 +129,36 @@ const SERVER = {
       category: cats[p.userId % cats.length],
       updatedAt: Date.now()
     }));
-  },
-  async postQuote(q) {
-    const res = await fetch("https://jsonplaceholder.typicode.com/posts", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: q.text, body: q.category })
-    });
-    const created = await res.json();
-    return { serverId: created.id || Math.floor(Math.random()*100000) };
   }
 };
 
-// ---------- REQUIRED: fetchQuotesFromServer ----------
+// ---------- Fetch Wrapper ----------
 async function fetchQuotesFromServer() {
-  // Wrapper so other code / UI can call this name
   return await SERVER.fetchQuotes();
 }
 
-// ---------- Sync & Conflict Resolution ----------
+// ---------- Sync ----------
 async function performSync({silent=false} = {}) {
   try {
     const serverQuotes = await fetchQuotesFromServer();
     const localMapByKey = new Map(quotes.map(q => [keyOf(q), q]));
     const localMapByServerId = new Map(quotes.filter(q => q.serverId).map(q => [q.serverId, q]));
-    let added=0, updated=0, conflictCount=0, newConflicts=[];
+    let added=0, updated=0;
     for (const sq of serverQuotes) {
       const k = keyOf(sq);
       const byServerId = sq.serverId ? localMapByServerId.get(sq.serverId) : null;
       const byKey = localMapByKey.get(k);
-      if (byServerId) {
-        const differs = byServerId.text!==sq.text || byServerId.category!==sq.category;
-        if (differs) { newConflicts.push({ key:k, localQuote:{...byServerId}, serverQuote:{...sq} });
-          Object.assign(byServerId, sq); updated++; conflictCount++; }
-      } else if (byKey) {
-        const differs = byKey.text!==sq.text || byKey.category!==sq.category;
-        if (differs) { newConflicts.push({ key:k, localQuote:{...byKey}, serverQuote:{...sq} });
-          Object.assign(byKey, sq); updated++; conflictCount++; }
-        else { byKey.serverId = sq.serverId; byKey.updatedAt = Math.max(byKey.updatedAt||0, sq.updatedAt||0); updated++; }
-      } else { quotes.push(sq); added++; }
+      if (byServerId) { Object.assign(byServerId, sq); updated++; }
+      else if (byKey) { Object.assign(byKey, sq); updated++; }
+      else { quotes.push(sq); added++; }
     }
-    if (newConflicts.length) { conflicts=newConflicts; showSyncBanner(`${conflictCount} conflict(s) resolved (server kept).`); }
-    else if (!silent) { showSyncBanner("Synced with server."); }
     saveQuotes(); setLastSync(Date.now());
     populateCategories(selectedCategory); filterQuotes();
-    return {added,updated,conflicts:conflictCount};
+    if (!silent) showSyncBanner(`Synced: ${added} new, ${updated} updated`);
+    return {added,updated};
   } catch (e) {
-    if (!silent && els.syncBanner) { els.syncBanner.style.display="block"; els.syncMessage.textContent="Sync failed."; }
-    return {added:0,updated:0,conflicts:0,error:true};
+    if (!silent) showSyncBanner("Sync failed.");
+    return {error:true};
   }
 }
 function showSyncBanner(message) {
@@ -208,12 +166,17 @@ function showSyncBanner(message) {
   els.syncBanner.style.display="block"; els.syncMessage.textContent=message;
 }
 
+// ---------- REQUIRED: syncQuotes ----------
+async function syncQuotes(options={}) {
+  return await performSync(options);
+}
+
 // ---------- Auto Sync ----------
 let syncTimer=null;
 function startAutoSync() {
-  performSync({silent:true});
+  syncQuotes({silent:true});
   const last=getLastSync(); if (last && els.syncStatus) els.syncStatus.textContent=`Last sync: ${new Date(last).toLocaleString()}`;
-  syncTimer=setInterval(()=>performSync({silent:true}),30000);
+  syncTimer=setInterval(()=>syncQuotes({silent:true}),30000);
 }
 
 // ---------- Boot ----------
@@ -221,14 +184,12 @@ document.addEventListener("DOMContentLoaded", () => {
   populateCategories(selectedCategory); renderQuotesList(currentFilteredQuotes()); showRandomQuote();
   if (els.newQuoteBtn) els.newQuoteBtn.addEventListener("click", showRandomQuote);
   if (els.categoryFilter) els.categoryFilter.addEventListener("change", ()=>{ saveSelectedCategory(els.categoryFilter.value); filterQuotes(); });
-  if (els.toggleAddQuoteBtn) els.toggleAddQuoteBtn.addEventListener("click", () => {
-    if (!document.getElementById("dqgAddForm")) createAddQuoteForm();
-    const form=document.getElementById("dqgAddForm"); const visible=form && form.style.display!=="none";
-    if (form) form.style.display=visible?"none":"block"; els.toggleAddQuoteBtn.textContent=visible?"Add Quote":"Close Add Quote";
-  });
-  if (els.forceSyncBtn) els.forceSyncBtn.addEventListener("click", ()=>performSync());
+  if (els.forceSyncBtn) els.forceSyncBtn.addEventListener("click", ()=>syncQuotes());
   startAutoSync();
-  window.filterQuotes=filterQuotes; window.showRandomQuote=showRandomQuote;
-  window.createAddQuoteForm=createAddQuoteForm; window.addQuote=addQuote;
-  window.fetchQuotesFromServer=fetchQuotesFromServer;
+  // expose
+  window.fetchQuotesFromServer = fetchQuotesFromServer;
+  window.syncQuotes = syncQuotes;
+  window.filterQuotes = filterQuotes;
+  window.showRandomQuote = showRandomQuote;
+  window.addQuote = addQuote;
 });
