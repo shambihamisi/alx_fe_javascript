@@ -15,6 +15,11 @@
     <button id="toggleAddQuote">Add Quote</button>
   </div>
 
+  <div>
+    <button id="exportJson">Export JSON</button>
+    <input type="file" id="importFile" accept=".json" onchange="importFromJsonFile(event)" />
+  </div>
+
   <div id="quoteCard">
     <div id="quoteText">Click “Show New Quote” to get started.</div>
     <div id="quoteCategory"></div>
