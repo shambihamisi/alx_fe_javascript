@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Dynamic Quote Generator</title>
 </head>
@@ -18,14 +18,32 @@
   </div>
 
   <div id="quoteCard">
-    <div id="quoteText">Click “Show New Quote” to get started.</div>
-    <div id="quoteCategory"></div>
+    <div id="quoteDisplay">Click “Show New Quote” to get started.</div>
   </div>
 
   <h2>Quotes</h2>
   <ul id="quotesList"></ul>
 
   <div id="addQuoteContainer"></div>
+
+  <hr/>
+
+  <h2>Sync</h2>
+  <div>
+    <button id="forceSyncBtn">Sync Now</button>
+    <span id="syncStatus"></span>
+  </div>
+
+  <div id="syncBanner" style="display:none;">
+    <strong id="syncMessage"></strong>
+    <button id="reviewConflictsBtn">Review Conflicts</button>
+  </div>
+
+  <div id="conflictPanel" style="display:none; border:1px solid #ccc; padding:1rem; margin-top:.75rem;">
+    <h3>Resolve Conflicts</h3>
+    <div id="conflictList"></div>
+    <button id="closeConflictPanel">Close</button>
+  </div>
 
   <script src="script.js"></script>
 </body>
